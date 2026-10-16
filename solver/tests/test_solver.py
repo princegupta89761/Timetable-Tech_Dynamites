@@ -715,3 +715,38 @@ def test_benchmark_demo_and_85_capacity():
 
     # Assert 1-worker demo-size returns ok in under 10 s
     assert results["demo-size_1w"] < 10000, f"1-worker demo-size took {results['demo-size_1w']} ms, expected < 10000 ms"
+
+
+def test_cross_check_with_vcs_validate():
+    """
+    Every timetable returned by solve() must pass vcs.validate().
+    A deliberately broken timetable (slot moved onto another teacher's slot)
+    must be flagged by BOTH independent_check and vcs.validate().
+    """
+    from vcs.validate import validate
+
+    problem = _build_demo_problem()
+    result = solve(problem)
+    assert result["status"] == "ok"
+    timetable = result["timetable"]
+
+    # 1. Valid timetable returns empty list from both checkers
+    indep_violations = independent_check(timetable, problem)
+    vcs_violations = validate(timetable, problem)
+    assert indep_violations == []
+    assert vcs_violations == []
+
+    # 2. Deliberately break the timetable: move slot 0 to the exact (day, period) of slot 1
+    broken_slots = [dict(s) for s in timetable["slots"]]
+    assert len(broken_slots) >= 2
+    target = broken_slots[1]
+    broken_slots[0]["day"] = target["day"]
+    broken_slots[0]["period"] = target["period"]
+    # If same teacher, causes teacher clash; if same batch, causes batch clash; or room clash
+    broken_timetable = {"slots": broken_slots}
+
+    flagged_indep = independent_check(broken_timetable, problem)
+    flagged_vcs = validate(broken_timetable, problem)
+
+    assert len(flagged_indep) > 0, "independent_check failed to flag broken timetable"
+    assert len(flagged_vcs) > 0, "vcs.validate failed to flag broken timetable"
