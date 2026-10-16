@@ -314,63 +314,40 @@ def solve(problem: dict) -> dict:
     penalty_terms = []
 
     # 1. Soft Goal: Avoid same subject twice in one day for a batch
-    # Penalize if sum of sessions of same subject in a day > 1
     for (b_id, d, s_id), vlist in batch_day_subject_vars.items():
         if len(vlist) > 1:
             excess = model.NewIntVar(0, len(vlist), f"excess_{b_id}_d{d}_s{s_id}")
-            # excess >= sum(vlist) - 1
             model.Add(excess >= sum(vlist) - 1)
             penalty_terms.append(excess * 50)
 
     # 2. Soft Goal: Spread lectures across days (balance load across days for a batch)
     for b_id in batches:
-        day_loads = []
+        # Ideal load per day is total_lectures / len(days)
+        total_reqs = sum(req["lectures_per_week"] for req in requirements if req["batch_id"] == b_id)
+        target_per_day = max(1, (total_reqs + len(days) - 1) // len(days))
         for d in days:
-            d_vars = []
+            day_vars = []
             for p in period_indices:
                 if (b_id, d, p) in batch_slot_active:
-                    d_vars.append(batch_slot_active[(b_id, d, p)])
-            load_var = model.NewIntVar(0, len(period_indices), f"load_{b_id}_d{d}")
-            if d_vars:
-                model.Add(load_var == sum(d_vars))
-            else:
-                model.Add(load_var == 0)
-            day_loads.append(load_var)
+                    day_vars.append(batch_slot_active[(b_id, d, p)])
+            if day_vars:
+                overload = model.NewIntVar(0, len(day_vars), f"overload_{b_id}_d{d}")
+                model.Add(overload >= sum(day_vars) - target_per_day)
+                penalty_terms.append(overload * 10)
 
-        # Penalize max day load - min day load or variance proxy (max load for batch)
-        if day_loads:
-            max_day_load = model.NewIntVar(0, len(period_indices), f"max_load_{b_id}")
-            model.AddMaxEquality(max_day_load, day_loads)
-            penalty_terms.append(max_day_load * 10)
-
-    # 3. Soft Goal: Avoid gaps within a day for a batch
-    # A gap occurs if period p is empty, but some earlier period p1 < p is active and some later period p2 > p is active.
+    # 3. Soft Goal: Avoid isolated single period gaps within a day for a batch
     for b_id in batches:
         for d in days:
-            active_p_vars = [batch_slot_active.get((b_id, d, p)) for p in period_indices]
-            # For each intermediate period p_k (not first or last)
             for k in range(1, len(period_indices) - 1):
-                p_var = active_p_vars[k]
-                if p_var is None:
-                    continue
-                earlier = [v for v in active_p_vars[:k] if v is not None]
-                later = [v for v in active_p_vars[k+1:] if v is not None]
-                if earlier and later:
-                    has_earlier = model.NewBoolVar(f"has_earlier_{b_id}_d{d}_k{k}")
-                    has_later = model.NewBoolVar(f"has_later_{b_id}_d{d}_k{k}")
+                p_prev = batch_slot_active.get((b_id, d, period_indices[k - 1]))
+                p_curr = batch_slot_active.get((b_id, d, period_indices[k]))
+                p_next = batch_slot_active.get((b_id, d, period_indices[k + 1]))
+                if p_prev is not None and p_curr is not None and p_next is not None:
                     is_gap = model.NewBoolVar(f"gap_{b_id}_d{d}_k{k}")
-
-                    model.Add(sum(earlier) >= 1).OnlyEnforceIf(has_earlier)
-                    model.Add(sum(earlier) == 0).OnlyEnforceIf(has_earlier.Not())
-
-                    model.Add(sum(later) >= 1).OnlyEnforceIf(has_later)
-                    model.Add(sum(later) == 0).OnlyEnforceIf(has_later.Not())
-
-                    # is_gap = has_earlier AND has_later AND (NOT p_var)
-                    model.AddBoolAnd([has_earlier, has_later, p_var.Not()]).OnlyEnforceIf(is_gap)
-                    model.AddBoolOr([has_earlier.Not(), has_later.Not(), p_var]).OnlyEnforceIf(is_gap.Not())
-
-                    penalty_terms.append(is_gap * 20)
+                    # is_gap = 1 <=> p_prev == 1, p_curr == 0, p_next == 1
+                    model.AddBoolAnd([p_prev, p_curr.Not(), p_next]).OnlyEnforceIf(is_gap)
+                    model.AddBoolOr([p_prev.Not(), p_curr, p_next.Not()]).OnlyEnforceIf(is_gap.Not())
+                    penalty_terms.append(is_gap * 15)
 
     if penalty_terms:
         model.Minimize(sum(penalty_terms))
@@ -379,6 +356,7 @@ def solve(problem: dict) -> dict:
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds
     solver.parameters.num_workers = 4  # multithreaded solving for speed
+    solver.parameters.relative_gap_limit = 0.05
 
     status = solver.Solve(model)
     elapsed_ms = int((time.perf_counter() - start_time) * 1000)
@@ -415,16 +393,22 @@ def solve(problem: dict) -> dict:
     elif status == cp_model.INFEASIBLE:
         # Detailed conflict diagnosis
         reasons = ["The constraints (room/teacher/batch availability and block sizes) are mutually infeasible."]
-        # Add any partial diagnostics
         return {
             "status": "infeasible",
             "timetable": None,
             "reasons": reasons,
         }
-    else:
-        # UNKNOWN or MODEL_INVALID -> timeout
+    elif status == cp_model.UNKNOWN:
         return {
             "status": "timeout",
             "timetable": None,
             "reasons": [f"Solver timed out after {time_limit_seconds} seconds without finding a feasible solution."],
+        }
+    elif status == cp_model.MODEL_INVALID:
+        raise ValueError("CP-SAT model is invalid. Check input data constraints and ranges.")
+    else:
+        return {
+            "status": "timeout",
+            "timetable": None,
+            "reasons": [f"Solver ended with unexpected status {status}."],
         }
