@@ -60,6 +60,49 @@ class TimetableVCS:
             "to": commit_id_2,
             "changes": changes if changes else ["No differences found between commits."]
         }
+    
+    def validate_and_edit(self, slot: int, room: str, batch: str, subject: str):
+        """Validates a manual edit against existing slots at HEAD to prevent clashes."""
+        if not self.head:
+            return {"valid": False, "reason": "No active timetable found. Generate one first."}
+            
+        current_timetable = self.commits[self.head]["timetable"]
+        
+        # Check for room clash or batch clash in the target slot
+        for item in current_timetable:
+            if item["slot"] == slot:
+                if item["room"] == room:
+                    return {"valid": False, "reason": f"Room {room} is already booked at Slot {slot} by batch {item['batch']} for {item['subject']}."}
+                if item["batch"] == batch:
+                    return {"valid": False, "reason": f"Batch {batch} already has a lecture ({item['subject']}) at Slot {slot}."}
+                    
+        # If valid, apply the edit (modify or add)
+        updated_timetable = [dict(item) for item in current_timetable]
+        found = False
+        for item in updated_timetable:
+            if item["batch"] == batch and item["subject"] == subject:
+                item["slot"] = slot
+                item["room"] = room
+                found = True
+                break
+                
+        if not found:
+            # Add new if not present
+            updated_timetable.append({"slot": slot, "room": room, "batch": batch, "subject": subject, "teacher": "Prof. Assigned"})
+            
+        return {"valid": True, "new_timetable": updated_timetable}
+
+    def revert_to_commit(self, target_commit_id: str):
+        """Reverts the state back to a previous commit by creating a new commit."""
+        target_snap = self.commits.get(target_commit_id)
+        if not target_snap:
+            return {"error": "Target commit ID not found."}
+            
+        new_commit = self.create_commit(
+            target_snap["timetable"], 
+            message=f"Reverted to {target_commit_id}"
+        )
+        return new_commit
 
 if __name__ == "__main__":
     vcs = TimetableVCS()

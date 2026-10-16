@@ -51,3 +51,30 @@ def compute_commit_diff(req: DiffRequest):
     if "error" in diff:
         raise HTTPException(status_code=404, detail=diff["error"])
     return diff
+
+class EditRequest(BaseModel):
+    slot: int
+    room: str
+    batch: str
+    subject: str
+
+@app.post("/api/edit")
+def edit_timetable(req: EditRequest):
+    """Edits a slot manually. Rejects if it causes a clash."""
+    validation = vcs.validate_and_edit(req.slot, req.room, req.batch, req.subject)
+    if not validation["valid"]:
+        raise HTTPException(status_code=400, detail={"error": "Clash detected", "reason": validation["reason"]})
+        
+    commit = vcs.create_commit(validation["new_timetable"], message=f"Edited lecture for {req.batch} at Slot {req.slot}")
+    return {"status": "success", "commit": commit}
+
+class RevertRequest(BaseModel):
+    commit_id: str
+
+@app.post("/api/revert")
+def revert_timetable(req: RevertRequest):
+    """Reverts the timetable to a specific past commit."""
+    result = vcs.revert_to_commit(req.commit_id)
+    if isinstance(result, dict) and "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return {"status": "success", "commit": result}
