@@ -20,7 +20,7 @@ Creating university campus timetables by hand inevitably causes clashes: a profe
 | Layer | Technology |
 |---|---|
 | **Solver** | Python + Google OR-Tools CP-SAT (`ortools`) |
-| **Backend & API** | Python 3.14 + FastAPI + Uvicorn |
+| **Backend & API** | Python 3.12 + FastAPI + Uvicorn |
 | **VCS Engine** | Snapshots + Plain-English Diff + Atomic Disk Persistence (`commits.json`) |
 | **Testing** | `pytest` + `httpx` (39 independent unit & integration tests) |
 | **Frontend** | React (built to `frontend/dist` and served statically by FastAPI) |

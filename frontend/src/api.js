@@ -1,6 +1,6 @@
 /* src/api.js
    Mockable API client.
-   If VITE_USE_MOCK is true (default), uses in-memory mock store seeded from data/seed.json.
+    If VITE_USE_MOCK is "true", uses in-memory mock store seeded from data/seed.json.
    Otherwise forwards requests to the real backend.
 */
 
@@ -53,15 +53,9 @@ async function parseJsonResponse(response) {
   return await response.json();
 }
 
-// Determine whether to use mock mode (default true)
+// Determine whether to use mock mode (opt-in)
 function useMock() {
-  // In environments without Vite's import.meta (e.g., Node tests), default to mock mode.
-  try {
-    const val = import.meta?.env?.VITE_USE_MOCK;
-    return val === undefined || val === true || val === 'true';
-  } catch {
-    return true;
-  }
+  return import.meta.env?.VITE_USE_MOCK === 'true';
 }
 
 export async function getProblem() {
@@ -113,8 +107,17 @@ export async function getCommitDiff(commitId) {
     const commit = mockStore.commits.find(c => c.id === commitId);
     return commit ? commit.diff : null;
   }
-  const res = await fetch(`/api/commits/${commitId}`);
-  if (!res.ok) throw new Error(`GET /api/commits/${commitId} failed: ${res.status}`);
+
+  const commitRes = await fetch(`/api/commits/${encodeURIComponent(commitId)}`);
+  if (!commitRes.ok) {
+    throw new Error(`GET /api/commits/${commitId} failed: ${commitRes.status}`);
+  }
+  const commit = await parseJsonResponse(commitRes);
+  if (!commit.parent_id) return null;
+
+  const query = new URLSearchParams({ from: commit.parent_id, to: commit.id });
+  const res = await fetch(`/api/diff?${query}`);
+  if (!res.ok) throw new Error(`GET /api/diff failed: ${res.status}`);
   return await parseJsonResponse(res);
 }
 
