@@ -1,5 +1,29 @@
+import os
+import threading
 import time
 from ortools.sat.python import cp_model
+
+
+class EarlyStopSolutionCallback(cp_model.CpSolverSolutionCallback):
+    def __init__(self, stop_delay_seconds: float = 1.5):
+        super().__init__()
+        self._stop_delay = stop_delay_seconds
+        self._timer: threading.Timer | None = None
+        self.stopped_early = False
+
+    def on_solution_callback(self):
+        if self._timer is None:
+            self._timer = threading.Timer(self._stop_delay, self._trigger_stop)
+            self._timer.daemon = True
+            self._timer.start()
+
+    def _trigger_stop(self):
+        self.stopped_early = True
+        self.StopSearch()
+
+    def cancel(self):
+        if self._timer is not None:
+            self._timer.cancel()
 
 
 def _precheck_feasibility(problem: dict) -> list[str]:
@@ -82,7 +106,13 @@ def _precheck_feasibility(problem: dict) -> list[str]:
                     f"Teacher {t_name} ({t_id}) needs {load} periods/week which exceeds weekly max capacity ({max_possible_weekly}) based on max_per_day {max_per_day}."
                 )
 
-    # 3. Room-type and capacity fit pre-check
+    # 3. Subject lookup pre-check
+    for req in requirements:
+        s_id = req.get("subject_id")
+        if s_id not in subjects:
+            reasons.append(f"Requirement {req.get('id')} references unknown subject {s_id}.")
+
+    # 4. Room-type and capacity fit pre-check
     # For each requirement, ensure at least one compatible room exists
     for req in requirements:
         b_id = req.get("batch_id")
@@ -280,13 +310,18 @@ def solve(problem: dict) -> dict:
             }
         model.Add(sum(candidates) == 1)
 
+    # Soft goals configuration (default: duplicate_subject only)
+    soft_goals = problem.get("soft_goals", ["duplicate_subject"])
+    need_active_indicators = ("spread" in soft_goals) or ("gaps" in soft_goals)
+
     # Constraint 1: Batch clash (at most one slot per (day, period))
     for (b_id, d, p), vlist in batch_slot_vars.items():
         model.Add(sum(vlist) <= 1)
-        # Create active indicator for gaps analysis
-        b_active_var = model.NewBoolVar(f"active_b_{b_id}_d{d}_p{p}")
-        model.Add(b_active_var == sum(vlist))
-        batch_slot_active[(b_id, d, p)] = b_active_var
+        if need_active_indicators:
+            # Create active indicator for gaps/spread analysis
+            b_active_var = model.NewBoolVar(f"active_b_{b_id}_d{d}_p{p}")
+            model.Add(b_active_var == sum(vlist))
+            batch_slot_active[(b_id, d, p)] = b_active_var
 
     # Constraint 2: Teacher clash (at most one slot per (day, period))
     for (t_id, d, p), vlist in teacher_slot_vars.items():
@@ -314,40 +349,42 @@ def solve(problem: dict) -> dict:
     penalty_terms = []
 
     # 1. Soft Goal: Avoid same subject twice in one day for a batch
-    for (b_id, d, s_id), vlist in batch_day_subject_vars.items():
-        if len(vlist) > 1:
-            excess = model.NewIntVar(0, len(vlist), f"excess_{b_id}_d{d}_s{s_id}")
-            model.Add(excess >= sum(vlist) - 1)
-            penalty_terms.append(excess * 50)
+    if "duplicate_subject" in soft_goals:
+        for (b_id, d, s_id), vlist in batch_day_subject_vars.items():
+            if len(vlist) > 1:
+                excess = model.NewIntVar(0, len(vlist), f"excess_{b_id}_d{d}_s{s_id}")
+                model.Add(excess >= sum(vlist) - 1)
+                penalty_terms.append(excess * 50)
 
     # 2. Soft Goal: Spread lectures across days (balance load across days for a batch)
-    for b_id in batches:
-        # Ideal load per day is total_lectures / len(days)
-        total_reqs = sum(req["lectures_per_week"] for req in requirements if req["batch_id"] == b_id)
-        target_per_day = max(1, (total_reqs + len(days) - 1) // len(days))
-        for d in days:
-            day_vars = []
-            for p in period_indices:
-                if (b_id, d, p) in batch_slot_active:
-                    day_vars.append(batch_slot_active[(b_id, d, p)])
-            if day_vars:
-                overload = model.NewIntVar(0, len(day_vars), f"overload_{b_id}_d{d}")
-                model.Add(overload >= sum(day_vars) - target_per_day)
-                penalty_terms.append(overload * 10)
+    if "spread" in soft_goals:
+        for b_id in batches:
+            total_reqs = sum(req["lectures_per_week"] for req in requirements if req["batch_id"] == b_id)
+            target_per_day = max(1, (total_reqs + len(days) - 1) // len(days))
+            for d in days:
+                day_vars = []
+                for p in period_indices:
+                    if (b_id, d, p) in batch_slot_active:
+                        day_vars.append(batch_slot_active[(b_id, d, p)])
+                if day_vars:
+                    overload = model.NewIntVar(0, len(day_vars), f"overload_{b_id}_d{d}")
+                    model.Add(overload >= sum(day_vars) - target_per_day)
+                    penalty_terms.append(overload * 10)
 
     # 3. Soft Goal: Avoid isolated single period gaps within a day for a batch
-    for b_id in batches:
-        for d in days:
-            for k in range(1, len(period_indices) - 1):
-                p_prev = batch_slot_active.get((b_id, d, period_indices[k - 1]))
-                p_curr = batch_slot_active.get((b_id, d, period_indices[k]))
-                p_next = batch_slot_active.get((b_id, d, period_indices[k + 1]))
-                if p_prev is not None and p_curr is not None and p_next is not None:
-                    is_gap = model.NewBoolVar(f"gap_{b_id}_d{d}_k{k}")
-                    # is_gap = 1 <=> p_prev == 1, p_curr == 0, p_next == 1
-                    model.AddBoolAnd([p_prev, p_curr.Not(), p_next]).OnlyEnforceIf(is_gap)
-                    model.AddBoolOr([p_prev.Not(), p_curr, p_next.Not()]).OnlyEnforceIf(is_gap.Not())
-                    penalty_terms.append(is_gap * 15)
+    if "gaps" in soft_goals:
+        for b_id in batches:
+            for d in days:
+                for k in range(1, len(period_indices) - 1):
+                    p_prev = batch_slot_active.get((b_id, d, period_indices[k - 1]))
+                    p_curr = batch_slot_active.get((b_id, d, period_indices[k]))
+                    p_next = batch_slot_active.get((b_id, d, period_indices[k + 1]))
+                    if p_prev is not None and p_curr is not None and p_next is not None:
+                        is_gap = model.NewBoolVar(f"gap_{b_id}_d{d}_k{k}")
+                        # is_gap = 1 <=> p_prev == 1, p_curr == 0, p_next == 1
+                        model.AddBoolAnd([p_prev, p_curr.Not(), p_next]).OnlyEnforceIf(is_gap)
+                        model.AddBoolOr([p_prev.Not(), p_curr, p_next.Not()]).OnlyEnforceIf(is_gap.Not())
+                        penalty_terms.append(is_gap * 15)
 
     if penalty_terms:
         model.Minimize(sum(penalty_terms))
@@ -355,10 +392,16 @@ def solve(problem: dict) -> dict:
     # Solve
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds
-    solver.parameters.num_workers = 4  # multithreaded solving for speed
+    default_workers = min(4, os.cpu_count() or 1)
+    solver.parameters.num_workers = int(problem.get("num_workers", default_workers))
     solver.parameters.relative_gap_limit = 0.05
 
-    status = solver.Solve(model)
+    callback = EarlyStopSolutionCallback(stop_delay_seconds=1.5)
+    try:
+        status = solver.Solve(model, callback)
+    finally:
+        callback.cancel()
+
     elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -382,12 +425,14 @@ def solve(problem: dict) -> dict:
         slots.sort(key=lambda s: (s["batch_id"], s["day"], s["period"]))
 
         soft_score = int(solver.ObjectiveValue()) if penalty_terms else 0
+        is_optimal = (status == cp_model.OPTIMAL) and not callback.stopped_early
         return {
             "status": "ok",
             "timetable": {"slots": slots},
             "stats": {
                 "solve_ms": elapsed_ms,
                 "soft_score": soft_score,
+                "optimal": is_optimal,
             },
         }
     elif status == cp_model.INFEASIBLE:

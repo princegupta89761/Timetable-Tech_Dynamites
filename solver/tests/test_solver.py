@@ -594,3 +594,124 @@ def test_determinism_sorted_output():
 
     keys = [(s["batch_id"], s["day"], s["period"]) for s in slots]
     assert keys == sorted(keys), "Slots are not sorted by (batch_id, day, period)"
+
+
+def test_infeasible_unknown_subject():
+    """Requirement referencing unknown subject_id must return infeasible without crashing."""
+    problem = {
+        "config": {
+            "days": [0, 1],
+            "periods": [{"index": 0, "label": "P0"}],
+        },
+        "teachers": [{"id": "t1", "name": "Teacher 1", "unavailable": [], "max_per_day": 2}],
+        "rooms": [{"id": "r1", "name": "Room 1", "capacity": 50, "type": "classroom"}],
+        "batches": [{"id": "b1", "name": "Batch 1", "size": 30}],
+        "subjects": [{"id": "s_known", "name": "Known Subject", "room_type": "classroom"}],
+        "requirements": [
+            {"id": "q1", "batch_id": "b1", "subject_id": "s_nonexistent", "teacher_id": "t1", "lectures_per_week": 1, "block_size": 1},
+        ],
+        "time_limit_seconds": 5,
+    }
+    result = solve(problem)
+    assert result["status"] == "infeasible"
+    assert any("unknown subject s_nonexistent" in r for r in result["reasons"])
+
+
+def _build_demo_problem():
+    return {
+        "config": {
+            "days": [0, 1, 2, 3, 4],
+            "periods": [{"index": i, "label": f"P{i}"} for i in range(6)],
+        },
+        "teachers": [
+            {"id": f"t{i:02d}", "name": f"Prof. Teacher {i}", "unavailable": [{"day": i % 5, "period": (i * 2) % 6}], "max_per_day": 4}
+            for i in range(1, 13)
+        ],
+        "rooms": [
+            {"id": f"r{i}", "name": f"Classroom {i}", "capacity": 60, "type": "classroom"}
+            for i in range(1, 7)
+        ] + [
+            {"id": f"l{i}", "name": f"Lab {i}", "capacity": 60, "type": "lab"}
+            for i in range(1, 3)
+        ],
+        "batches": [
+            {"id": f"b{i}", "name": f"Batch {i}", "size": 55}
+            for i in range(1, 7)
+        ],
+        "subjects": [
+            {"id": f"sub_c{i}", "name": f"Theory {i}", "room_type": "classroom"}
+            for i in range(1, 9)
+        ] + [
+            {"id": f"sub_l{i}", "name": f"Lab Course {i}", "room_type": "lab"}
+            for i in range(1, 5)
+        ],
+        "requirements": [
+            {"id": f"q_{b}_{s}", "batch_id": f"b{b}", "subject_id": f"sub_c{((b+s)%8)+1}", "teacher_id": f"t{(((b*2)+s)%12)+1:02d}", "lectures_per_week": 3, "block_size": 1}
+            for b in range(1, 7) for s in range(3)
+        ] + [
+            {"id": f"ql_{b}", "batch_id": f"b{b}", "subject_id": f"sub_l{((b)%4)+1}", "teacher_id": f"t{((b+6)%12)+1:02d}", "lectures_per_week": 2, "block_size": 2}
+            for b in range(1, 7)
+        ],
+        "time_limit_seconds": 10,
+    }
+
+
+def _build_85_capacity_problem():
+    # 5 days x 6 periods = 30 periods total per batch.
+    # 25 periods scheduled = 83.3% (~85%) capacity.
+    return {
+        "config": {
+            "days": [0, 1, 2, 3, 4],
+            "periods": [{"index": i, "label": f"P{i}"} for i in range(6)],
+        },
+        "teachers": [
+            {"id": f"t{i:02d}", "name": f"Teacher {i}", "unavailable": [], "max_per_day": 4}
+            for i in range(1, 13)
+        ],
+        "rooms": [
+            {"id": f"r{i}", "name": f"Classroom {i}", "capacity": 60, "type": "classroom"}
+            for i in range(1, 6)
+        ] + [
+            {"id": "l1", "name": "Lab 1", "capacity": 60, "type": "lab"}
+        ],
+        "batches": [
+            {"id": f"b{i}", "name": f"Batch {i}", "size": 50}
+            for i in range(1, 4)
+        ],
+        "subjects": [
+            {"id": f"s_th{i}", "name": f"Theory {i}", "room_type": "classroom"}
+            for i in range(1, 8)
+        ] + [
+            {"id": "s_lab", "name": "Lab Subject", "room_type": "lab"}
+        ],
+        "requirements": [
+            # 7 theory subjects x 3 lectures = 21 periods
+            {"id": f"q_th_{b}_{s}", "batch_id": f"b{b}", "subject_id": f"s_th{s}", "teacher_id": f"t{((b*7 + s) % 12) + 1:02d}", "lectures_per_week": 3, "block_size": 1}
+            for b in range(1, 4) for s in range(1, 8)
+        ] + [
+            # 2 lab blocks of 2 = 4 periods
+            {"id": f"q_lab_{b}", "batch_id": f"b{b}", "subject_id": "s_lab", "teacher_id": f"t{((b*3) % 12) + 1:02d}", "lectures_per_week": 4, "block_size": 2}
+            for b in range(1, 4)
+        ],
+        "time_limit_seconds": 10,
+    }
+
+
+def test_benchmark_demo_and_85_capacity():
+    """Benchmarks demo-size and 85%-capacity with 1 and 4 workers. Asserts 1-worker demo-size solves in <10s."""
+    demo_p = _build_demo_problem()
+    cap_p = _build_85_capacity_problem()
+
+    results = {}
+    for name, prob in [("demo-size", demo_p), ("85%-capacity", cap_p)]:
+        for w in [1, 4]:
+            p = dict(prob)
+            p["num_workers"] = w
+            res = solve(p)
+            assert res["status"] == "ok", f"{name} with {w} worker(s) failed: {res.get('reasons')}"
+            ms = res["stats"]["solve_ms"]
+            results[f"{name}_{w}w"] = ms
+            print(f"\n[BENCHMARK] {name} ({w} worker(s)): status={res['status']}, time={ms} ms, soft_score={res['stats'].get('soft_score')}, optimal={res['stats'].get('optimal')}")
+
+    # Assert 1-worker demo-size returns ok in under 10 s
+    assert results["demo-size_1w"] < 10000, f"1-worker demo-size took {results['demo-size_1w']} ms, expected < 10000 ms"
