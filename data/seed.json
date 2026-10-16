@@ -1,0 +1,97 @@
+{
+  "config": {
+    "days": [0, 1, 2, 3, 4],
+    "periods": [
+      { "index": 0, "label": "09:00-10:00" },
+      { "index": 1, "label": "10:00-11:00" },
+      { "index": 2, "label": "11:15-12:15" },
+      { "index": 3, "label": "12:15-13:15" },
+      { "index": 4, "label": "14:00-15:00" },
+      { "index": 5, "label": "15:00-16:00" }
+    ]
+  },
+  "teachers": [
+    { "id": "t01", "name": "Prof. Sharma", "unavailable": [{ "day": 2, "period": 4 }], "max_per_day": 4 },
+    { "id": "t02", "name": "Prof. Rao", "unavailable": [{ "day": 3, "period": 4 }], "max_per_day": 4 },
+    { "id": "t03", "name": "Prof. Iyer", "unavailable": [{ "day": 4, "period": 4 }], "max_per_day": 4 },
+    { "id": "t04", "name": "Prof. Kulkarni", "unavailable": [{ "day": 0, "period": 4 }], "max_per_day": 4 },
+    { "id": "t05", "name": "Prof. Deshmukh", "unavailable": [{ "day": 1, "period": 4 }], "max_per_day": 4 },
+    { "id": "t06", "name": "Prof. Patel", "unavailable": [{ "day": 2, "period": 5 }], "max_per_day": 4 },
+    { "id": "t07", "name": "Prof. Gupta", "unavailable": [{ "day": 3, "period": 5 }], "max_per_day": 4 },
+    { "id": "t08", "name": "Prof. Joshi", "unavailable": [{ "day": 4, "period": 5 }], "max_per_day": 4 },
+    { "id": "t09", "name": "Prof. Verma", "unavailable": [{ "day": 0, "period": 5 }], "max_per_day": 4 },
+    { "id": "t10", "name": "Prof. Nair", "unavailable": [{ "day": 1, "period": 5 }], "max_per_day": 4 },
+    { "id": "t11", "name": "Prof. Mehta", "unavailable": [{ "day": 2, "period": 0 }], "max_per_day": 4 },
+    { "id": "t12", "name": "Prof. Reddy", "unavailable": [{ "day": 3, "period": 0 }], "max_per_day": 4 }
+  ],
+  "rooms": [
+    { "id": "r101", "name": "Room 101", "capacity": 60, "type": "classroom" },
+    { "id": "r102", "name": "Room 102", "capacity": 60, "type": "classroom" },
+    { "id": "r103", "name": "Room 103", "capacity": 60, "type": "classroom" },
+    { "id": "r104", "name": "Room 104", "capacity": 60, "type": "classroom" },
+    { "id": "r105", "name": "Room 105", "capacity": 60, "type": "classroom" },
+    { "id": "r106", "name": "Room 106", "capacity": 60, "type": "classroom" },
+    { "id": "l301", "name": "Lab 301", "capacity": 60, "type": "lab" },
+    { "id": "l302", "name": "Lab 302", "capacity": 60, "type": "lab" }
+  ],
+  "batches": [
+    { "id": "b_se_a", "name": "SE-A", "size": 55 },
+    { "id": "b_se_b", "name": "SE-B", "size": 50 },
+    { "id": "b_te_a", "name": "TE-A", "size": 55 },
+    { "id": "b_te_b", "name": "TE-B", "size": 50 },
+    { "id": "b_be_a", "name": "BE-A", "size": 50 },
+    { "id": "b_be_b", "name": "BE-B", "size": 45 }
+  ],
+  "subjects": [
+    { "id": "s_dbms", "name": "DBMS", "room_type": "classroom" },
+    { "id": "s_os", "name": "OS", "room_type": "classroom" },
+    { "id": "s_cn", "name": "CN", "room_type": "classroom" },
+    { "id": "s_ai", "name": "AI", "room_type": "classroom" },
+    { "id": "s_se", "name": "SE", "room_type": "classroom" },
+    { "id": "s_math", "name": "Maths", "room_type": "classroom" },
+    { "id": "s_dsa", "name": "DSA", "room_type": "classroom" },
+    { "id": "s_web", "name": "WebDev", "room_type": "classroom" },
+    { "id": "s_dbms_lab", "name": "DBMS Lab", "room_type": "lab" },
+    { "id": "s_os_lab", "name": "OS Lab", "room_type": "lab" },
+    { "id": "s_cn_lab", "name": "CN Lab", "room_type": "lab" },
+    { "id": "s_ai_lab", "name": "AI Lab", "room_type": "lab" }
+  ],
+  "requirements": [
+    { "id": "q_b_se_a_s_dbms", "batch_id": "b_se_a", "subject_id": "s_dbms", "teacher_id": "t01", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_se_a_s_os", "batch_id": "b_se_a", "subject_id": "s_os", "teacher_id": "t02", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_se_a_s_cn", "batch_id": "b_se_a", "subject_id": "s_cn", "teacher_id": "t03", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_se_a_s_ai", "batch_id": "b_se_a", "subject_id": "s_ai", "teacher_id": "t04", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_se_a_s_dbms_lab", "batch_id": "b_se_a", "subject_id": "s_dbms_lab", "teacher_id": "t07", "lectures_per_week": 2, "block_size": 2 },
+
+    { "id": "q_b_se_b_s_os", "batch_id": "b_se_b", "subject_id": "s_os", "teacher_id": "t03", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_se_b_s_cn", "batch_id": "b_se_b", "subject_id": "s_cn", "teacher_id": "t04", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_se_b_s_ai", "batch_id": "b_se_b", "subject_id": "s_ai", "teacher_id": "t05", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_se_b_s_se", "batch_id": "b_se_b", "subject_id": "s_se", "teacher_id": "t06", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_se_b_s_os_lab", "batch_id": "b_se_b", "subject_id": "s_os_lab", "teacher_id": "t08", "lectures_per_week": 2, "block_size": 2 },
+
+    { "id": "q_b_te_a_s_cn", "batch_id": "b_te_a", "subject_id": "s_cn", "teacher_id": "t05", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_te_a_s_ai", "batch_id": "b_te_a", "subject_id": "s_ai", "teacher_id": "t06", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_te_a_s_se", "batch_id": "b_te_a", "subject_id": "s_se", "teacher_id": "t07", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_te_a_s_math", "batch_id": "b_te_a", "subject_id": "s_math", "teacher_id": "t08", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_te_a_s_cn_lab", "batch_id": "b_te_a", "subject_id": "s_cn_lab", "teacher_id": "t09", "lectures_per_week": 2, "block_size": 2 },
+
+    { "id": "q_b_te_b_s_ai", "batch_id": "b_te_b", "subject_id": "s_ai", "teacher_id": "t07", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_te_b_s_se", "batch_id": "b_te_b", "subject_id": "s_se", "teacher_id": "t08", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_te_b_s_math", "batch_id": "b_te_b", "subject_id": "s_math", "teacher_id": "t09", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_te_b_s_dsa", "batch_id": "b_te_b", "subject_id": "s_dsa", "teacher_id": "t10", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_te_b_s_ai_lab", "batch_id": "b_te_b", "subject_id": "s_ai_lab", "teacher_id": "t10", "lectures_per_week": 2, "block_size": 2 },
+
+    { "id": "q_b_be_a_s_se", "batch_id": "b_be_a", "subject_id": "s_se", "teacher_id": "t09", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_be_a_s_math", "batch_id": "b_be_a", "subject_id": "s_math", "teacher_id": "t10", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_be_a_s_dsa", "batch_id": "b_be_a", "subject_id": "s_dsa", "teacher_id": "t11", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_be_a_s_web", "batch_id": "b_be_a", "subject_id": "s_web", "teacher_id": "t12", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_be_a_s_dbms_lab", "batch_id": "b_be_a", "subject_id": "s_dbms_lab", "teacher_id": "t11", "lectures_per_week": 2, "block_size": 2 },
+
+    { "id": "q_b_be_b_s_math", "batch_id": "b_be_b", "subject_id": "s_math", "teacher_id": "t11", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_be_b_s_dsa", "batch_id": "b_be_b", "subject_id": "s_dsa", "teacher_id": "t12", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_be_b_s_web", "batch_id": "b_be_b", "subject_id": "s_web", "teacher_id": "t01", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_be_b_s_dbms", "batch_id": "b_be_b", "subject_id": "s_dbms", "teacher_id": "t02", "lectures_per_week": 3, "block_size": 1 },
+    { "id": "q_b_be_b_s_os_lab", "batch_id": "b_be_b", "subject_id": "s_os_lab", "teacher_id": "t12", "lectures_per_week": 2, "block_size": 2 }
+  ],
+  "time_limit_seconds": 10
+}
