@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import AppShell from "./components/AppShell";
 import HistoryPage from "./pages/HistoryPage";
 import TimetablePage from "./pages/TimetablePage";
@@ -7,19 +7,21 @@ import DataManagementPage from "./pages/DataManagementPage";
 
 function App() {
   const [page, setPage] = useState("history");
+  const [commitRefreshKey, setCommitRefreshKey] = useState(0);
+  const notifyCommitCreated = () => setCommitRefreshKey((key) => key + 1);
 
   const renderPage = () => {
     switch (page) {
       case "history":
-        return <HistoryPage />;
+        return <HistoryPage refreshKey={commitRefreshKey} />;
       case "timetable":
         return <TimetablePage />;
       case "generate":
-        return <GeneratePage />;
+        return <GeneratePage onCommitCreated={notifyCommitCreated} />;
       case "data":
         return <DataManagementPage />;
       default:
-        return <HistoryPage />;
+        return <HistoryPage refreshKey={commitRefreshKey} />;
     }
   };
 

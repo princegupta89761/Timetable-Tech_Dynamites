@@ -1,18 +1,24 @@
 /* src/pages/GeneratePage.jsx */
 import React, { useState } from 'react';
 import { postCommit } from '../api';
+import Toast from '../components/Toast';
 
-export default function GeneratePage() {
+export default function GeneratePage({ onCommitCreated }) {
   const [message, setMessage] = useState('Run solver and create generate commit');
-  const [status, setStatus] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [generating, setGenerating] = useState(false);
 
   const handleGenerate = async () => {
-    setStatus('Generating…');
+    setGenerating(true);
+    setToast(null);
     try {
       const commit = await postCommit(message);
-      setStatus(`✅ Commit ${commit.id} created`);
+      setToast({ type: 'success', message: `Commit ${commit.id} created.` });
+      onCommitCreated?.(commit);
     } catch (e) {
-      setStatus(`❌ Error: ${e.message}`);
+      setToast({ type: 'error', message: e.message || 'Unable to generate timetable.' });
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -27,11 +33,12 @@ export default function GeneratePage() {
       />
       <button
         onClick={handleGenerate}
+        disabled={generating}
         className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark transition"
       >
-        Run Solver
+        {generating ? 'Generating…' : 'Run Solver'}
       </button>
-      {status && <p className="mt-2">{status}</p>}
+      <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
     </div>
   );
 }

@@ -35,7 +35,11 @@ async function loadMockData() {
   const response = await fetch('/data/seed.json');
   const data = await response.json();
   // Deep clone to avoid mutation of original seed
-  mockStore = JSON.parse(JSON.stringify(data));
+  const seed = JSON.parse(JSON.stringify(data));
+  mockStore = {
+    problem: seed.problem ?? seed,
+    commits: seed.commits ?? [],
+  };
   // Ensure mock commits exist
   if (!Array.isArray(mockStore.commits) || mockStore.commits.length === 0) {
     mockStore.commits = generateMockCommits();
@@ -51,6 +55,11 @@ async function parseJsonResponse(response) {
     throw new Error(`Expected JSON but got ${contentType}: ${text}`);
   }
   return await response.json();
+}
+
+async function getApiErrorMessage(response, fallback) {
+  const payload = await response.json().catch(() => null);
+  return payload?.error?.message || fallback;
 }
 
 // Determine whether to use mock mode (opt-in)
@@ -86,26 +95,22 @@ export async function putProblem(updatedProblem) {
 export async function getCommitList() {
   if (useMock()) {
     await loadMockData();
-    return mockStore.commits || [];
+    return (mockStore.commits || [])
+      .map(({ snapshot, ...summary }) => summary)
+      .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));
   }
-  try {
-    const res = await fetch('/api/commits');
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`GET /api/commits failed: ${res.status} - ${text}`);
-    }
-    return await parseJsonResponse(res);
-  } catch (err) {
-    console.error('getCommitList error:', err);
-    return [];
+  const res = await fetch('/api/commits');
+  if (!res.ok) {
+    throw new Error(await getApiErrorMessage(res, `GET /api/commits failed: ${res.status}`));
   }
+  return await parseJsonResponse(res);
 }
 
 export async function getCommitDiff(commitId) {
   if (useMock()) {
     await loadMockData();
     const commit = mockStore.commits.find(c => c.id === commitId);
-    return commit ? commit.diff : null;
+    return commit?.parent_id ? commit.diff : null;
   }
 
   const commitRes = await fetch(`/api/commits/${encodeURIComponent(commitId)}`);
@@ -145,12 +150,20 @@ export async function revertCommit(commitId) {
   if (useMock()) {
     await loadMockData();
     const commit = mockStore.commits.find(c => c.id === commitId);
-    if (commit) {
-      // Naively reset problem to the stored snapshot (not implemented fully)
-      mockStore.problem = { ...mockStore.problem, ...commit.diff };
-      return { success: true };
-    }
-    return { success: false };
+    if (!commit) throw new Error(`Commit '${commitId}' not found.`);
+    const reverted = {
+      id: `c${Date.now()}`,
+      parent_id: mockStore.commits[0]?.id ?? null,
+      branch: commit.branch ?? 'main',
+      message: `Revert to ${commitId}`,
+      author: 'mock_user',
+      timestamp: new Date().toISOString(),
+      kind: 'revert',
+      snapshot: commit.snapshot ?? { slots: [] },
+    };
+    mockStore.commits.unshift(reverted);
+    mockStore.problem.timetable = reverted.snapshot;
+    return reverted;
   }
   const res = await fetch(`/api/revert`, {
     method: 'POST',
@@ -165,20 +178,80 @@ export async function revertCommit(commitId) {
 export async function getView(params) {
   if (useMock()) {
     await loadMockData();
-    // mock view returns schedule for a batch/teacher/room
-    const { batch, teacher, room } = params;
-    // timetable is { slots: [...] }, not a bare array
-    const slots = (mockStore.problem.timetable?.slots) ?? [];
-    return slots.filter(entry =>
-      (batch ? entry.batch_id === batch : true) &&
-      (teacher ? entry.teacher_id === teacher : true) &&
-      (room ? entry.room_id === room : true)
-    );
+    const [type, id] = Object.entries(params).find(([, value]) => value) ?? [];
+    const problem = mockStore.problem;
+    const collections = { batch: problem.batches, teacher: problem.teachers, room: problem.rooms };
+    const owner = collections[type]?.find(item => item.id === id);
+    if (!owner) throw new Error(`No ${type ?? 'view'} found for '${id ?? ''}'.`);
+
+    const days = problem.config?.days ?? [0, 1, 2, 3, 4];
+    const periods = problem.config?.periods ?? [];
+    const grid = periods.map(() => days.map(() => null));
+    const names = {
+      subjects: Object.fromEntries((problem.subjects ?? []).map(item => [item.id, item.name])),
+      teachers: Object.fromEntries((problem.teachers ?? []).map(item => [item.id, item.name])),
+      rooms: Object.fromEntries((problem.rooms ?? []).map(item => [item.id, item.name])),
+    };
+    const slots = problem.timetable?.slots ?? [];
+    slots.filter(slot => slot[`${type}_id`] === id).forEach(slot => {
+      const dayIndex = days.indexOf(slot.day);
+      const periodIndex = periods.findIndex(period => period.index === slot.period);
+      if (dayIndex >= 0 && periodIndex >= 0) {
+        grid[periodIndex][dayIndex] = {
+          subject: names.subjects[slot.subject_id] ?? slot.subject_id,
+          teacher: names.teachers[slot.teacher_id] ?? slot.teacher_id,
+          room: names.rooms[slot.room_id] ?? slot.room_id,
+        };
+      }
+    });
+    return { owner: { type, id, name: owner.name ?? id }, grid };
   }
   const query = new URLSearchParams(params).toString();
   const res = await fetch(`/api/view?${query}`);
   if (!res.ok) throw new Error(`GET /api/view failed: ${res.status}`);
   return await parseJsonResponse(res);
+}
+
+export async function editSlot({ message, slot_key, new: newSlot }) {
+  const body = { message, slot_key, new: newSlot };
+  if (useMock()) {
+    await loadMockData();
+    const slots = mockStore.problem.timetable?.slots ?? [];
+    const slotIndex = slots.findIndex(slot =>
+      slot.batch_id === slot_key.batch_id &&
+      slot.day === slot_key.day &&
+      slot.period === slot_key.period
+    );
+    if (slotIndex < 0) throw new Error('The selected timetable slot no longer exists.');
+
+    const updatedSlots = slots.map((slot, index) =>
+      index === slotIndex ? { ...slot, ...newSlot } : slot
+    );
+    const commit = {
+      id: `c${Date.now()}`,
+      parent_id: mockStore.commits[0]?.id ?? null,
+      branch: 'main',
+      message,
+      author: 'mock_user',
+      timestamp: new Date().toISOString(),
+      kind: 'edit',
+      snapshot: { slots: updatedSlots },
+    };
+    mockStore.problem.timetable = commit.snapshot;
+    mockStore.commits.unshift(commit);
+    return commit;
+  }
+
+  const res = await fetch('/api/edit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await getApiErrorMessage(res, `POST /api/edit failed: ${res.status}`));
+  }
+  const data = await parseJsonResponse(res);
+  return data.commit ?? data;
 }
 
 export async function seedData() {
