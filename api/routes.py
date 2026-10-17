@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
+from api.ics import build_ics
 from solver.engine import solve
 from vcs import commits
 from vcs.commits import ClashError
@@ -68,6 +70,12 @@ def get_problem() -> dict[str, Any]:
 def set_problem(problem: dict[str, Any]) -> None:
     global _current_problem
     _current_problem = problem
+
+
+def _select_owner_slots(
+    slots: list[dict[str, Any]], owner_type: str, owner_id: str
+) -> list[dict[str, Any]]:
+    return [slot for slot in slots if slot.get(f"{owner_type}_id") == owner_id]
 
 
 # Pydantic models for request bodies
@@ -212,8 +220,18 @@ def get_single_commit(commit_id: str) -> dict[str, Any]:
 def diff_commits(
     from_id: str = Query(..., alias="from"),
     to_id: str = Query(..., alias="to"),
+    teacher: str | None = None,
 ) -> dict[str, Any]:
     problem = get_problem()
+    teacher_ids = {item.get("id") for item in problem.get("teachers", [])}
+    if teacher is not None and teacher not in teacher_ids:
+        raise AppException(
+            status_code=404,
+            code="NOT_FOUND",
+            message=f"Teacher '{teacher}' not found.",
+            details=[],
+        )
+
     try:
         diff_result = compute_diff(
             snap_from=from_id,
@@ -223,7 +241,33 @@ def diff_commits(
             to_id=to_id,
             vcs=commits._default_vcs,
         )
-        return diff_result
+        if teacher is None:
+            return diff_result
+
+        requirement_teachers = {
+            item.get("id"): item.get("teacher_id")
+            for item in problem.get("requirements", [])
+        }
+
+        def change_involves_teacher(change: dict[str, Any]) -> bool:
+            change_type = change.get("type")
+            if change_type in {"moved", "changed"}:
+                if requirement_teachers.get(change.get("requirement_id")) == teacher:
+                    return True
+                if change_type == "changed":
+                    old_new_teachers = change.get("from", {}), change.get("to", {})
+                    return any(item.get("teacher_id") == teacher for item in old_new_teachers)
+                return False
+            if change_type in {"added", "removed"}:
+                return change.get("slot", {}).get("teacher_id") == teacher
+            return False
+
+        filtered_changes = [change for change in diff_result["changes"] if change_involves_teacher(change)]
+        summary = {
+            kind: sum(1 for change in filtered_changes if change.get("type") == kind)
+            for kind in ("moved", "added", "removed", "changed")
+        }
+        return {**diff_result, "changes": filtered_changes, "summary": summary}
     except ValueError as ve:
         raise AppException(
             status_code=404,
@@ -292,7 +336,7 @@ def get_grid_view(
         if batch not in batches_map:
             raise AppException(status_code=404, code="NOT_FOUND", message=f"Batch '{batch}' not found.")
         owner = {"type": "batch", "id": batch, "name": batches_map[batch]}
-        target_slots = [s for s in slots if s.get("batch_id") == batch]
+        target_slots = _select_owner_slots(slots, "batch", batch)
         for s in target_slots:
             r = period_to_row.get(s.get("period"))
             c = day_to_col.get(s.get("day"))
@@ -307,7 +351,7 @@ def get_grid_view(
         if teacher not in teachers_map:
             raise AppException(status_code=404, code="NOT_FOUND", message=f"Teacher '{teacher}' not found.")
         owner = {"type": "teacher", "id": teacher, "name": teachers_map[teacher]}
-        target_slots = [s for s in slots if s.get("teacher_id") == teacher]
+        target_slots = _select_owner_slots(slots, "teacher", teacher)
         for s in target_slots:
             r = period_to_row.get(s.get("period"))
             c = day_to_col.get(s.get("day"))
@@ -323,7 +367,7 @@ def get_grid_view(
         if room not in rooms_map:
             raise AppException(status_code=404, code="NOT_FOUND", message=f"Room '{room}' not found.")
         owner = {"type": "room", "id": room, "name": rooms_map[room]}
-        target_slots = [s for s in slots if s.get("room_id") == room]
+        target_slots = _select_owner_slots(slots, "room", room)
         for s in target_slots:
             r = period_to_row.get(s.get("period"))
             c = day_to_col.get(s.get("day"))
@@ -335,6 +379,55 @@ def get_grid_view(
                 }
 
     return {"owner": owner, "grid": grid}
+
+
+# 12. GET /api/export/ics
+@router.get("/export/ics")
+def export_ics(
+    teacher: str | None = None,
+    batch: str | None = None,
+    room: str | None = None,
+    weeks: int = Query(16, ge=1),
+) -> Response:
+    specified = [(kind, value) for kind, value in (("teacher", teacher), ("batch", batch), ("room", room)) if value is not None]
+    if len(specified) != 1:
+        raise AppException(
+            status_code=400,
+            code="BAD_REQUEST",
+            message="Exactly one of 'teacher', 'batch', or 'room' query parameter must be specified.",
+            details=[],
+        )
+
+    owner_type, owner_id = specified[0]
+    problem = get_problem()
+    owner_collection = {"teacher": "teachers", "batch": "batches", "room": "rooms"}[owner_type]
+    owner = next((item for item in problem.get(owner_collection, []) if item.get("id") == owner_id), None)
+    if owner is None:
+        raise AppException(
+            status_code=404,
+            code="NOT_FOUND",
+            message=f"{owner_type.capitalize()} '{owner_id}' not found.",
+            details=[],
+        )
+
+    head_id = commits._default_vcs.head
+    head_commit = commits.get_commit(head_id) if head_id else None
+    if not head_commit or "snapshot" not in head_commit:
+        raise AppException(
+            status_code=404,
+            code="NOT_FOUND",
+            message="No timetable is available for calendar export.",
+            details=[],
+        )
+
+    owner_slots = _select_owner_slots(head_commit["snapshot"].get("slots", []), owner_type, owner_id)
+    content = build_ics({"slots": owner_slots}, problem, owner.get("name", owner_id), weeks=weeks)
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", owner.get("name", owner_id)).strip("_") or owner_id
+    return Response(
+        content=content,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f'attachment; filename="timetable_{safe_name}.ics"'},
+    )
 
 
 # 11. POST /api/seed

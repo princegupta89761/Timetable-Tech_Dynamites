@@ -1,7 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from api import routes
 from main import app
+from vcs.commits import VCS
 
 
 @pytest.fixture(scope="module")
@@ -195,3 +197,227 @@ def test_api_commits_endpoints(client):
     missing_res = client.get("/api/commits/c9999")
     assert missing_res.status_code == 404
     assert missing_res.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_api_export_ics_for_teacher(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(routes.commits, "_default_vcs", VCS(tmp_path / "commits.json"))
+
+    seed_res = client.post("/api/seed")
+    assert seed_res.status_code == 200
+    problem = client.get("/api/problem").json()
+
+    block_requirements = [
+        requirement
+        for requirement in problem["requirements"]
+        if requirement.get("block_size") == 2
+    ]
+    assert block_requirements
+    teacher_id = block_requirements[0]["teacher_id"]
+
+    generate_res = client.post("/api/generate", json={"message": "ICS export test"})
+    assert generate_res.status_code == 200
+    timetable = generate_res.json()["commit"]["snapshot"]
+    teacher_slots = [slot for slot in timetable["slots"] if slot["teacher_id"] == teacher_id]
+    assert teacher_slots
+
+    merged_away = sum(
+        (requirement["lectures_per_week"] // requirement["block_size"])
+        * (requirement["block_size"] - 1)
+        for requirement in problem["requirements"]
+        if requirement["teacher_id"] == teacher_id and requirement["block_size"] > 1
+    )
+    expected_events = len(teacher_slots) - merged_away
+
+    export_res = client.get("/api/export/ics", params={"teacher": teacher_id})
+    assert export_res.status_code == 200
+    assert export_res.headers["content-type"].startswith("text/calendar")
+    assert export_res.text.startswith("BEGIN:VCALENDAR")
+    assert export_res.text.endswith("END:VCALENDAR")
+    assert export_res.text.count("BEGIN:VEVENT\r\n") == expected_events
+
+    block_requirement = next(
+        requirement
+        for requirement in problem["requirements"]
+        if requirement["teacher_id"] == teacher_id and requirement["block_size"] > 1
+    )
+    block_subject = next(
+        subject for subject in problem["subjects"] if subject["id"] == block_requirement["subject_id"]
+    )
+    block_batch = next(
+        batch for batch in problem["batches"] if batch["id"] == block_requirement["batch_id"]
+    )
+    block_events = [
+        event
+        for event in export_res.text.split("BEGIN:VEVENT\r\n")[1:]
+        if f"SUMMARY:{block_subject['name']} ({block_batch['name']})" in event
+    ]
+    assert block_events
+
+    from datetime import datetime, timedelta
+
+    event_fields = {
+        line.split(":", 1)[0]: line.split(":", 1)[1]
+        for line in block_events[0].split("\r\n")
+        if ":" in line
+    }
+    start = datetime.strptime(event_fields["DTSTART"], "%Y%m%dT%H%M%S")
+    end = datetime.strptime(event_fields["DTEND"], "%Y%m%dT%H%M%S")
+    assert end - start == timedelta(hours=2)
+
+
+def test_api_diff_filter_by_teacher(client, tmp_path, monkeypatch):
+    test_vcs = VCS(tmp_path / "commits.json")
+    monkeypatch.setattr(routes.commits, "_default_vcs", test_vcs)
+
+    seed_res = client.post("/api/seed")
+    assert seed_res.status_code == 200
+    problem = client.get("/api/problem").json()
+
+    generate_res = client.post("/api/generate", json={"message": "Diff filter test"})
+    assert generate_res.status_code == 200
+    commit_1 = generate_res.json()["commit"]
+    assert commit_1["id"] == "c0001"
+    slots = commit_1["snapshot"]["slots"]
+
+    requirements = {item["id"]: item for item in problem["requirements"]}
+    target_slot = next(
+        slot
+        for slot in slots
+        if requirements[slot["requirement_id"]].get("block_size", 1) == 1
+    )
+    teacher_id = target_slot["teacher_id"]
+    teacher = next(item for item in problem["teachers"] if item["id"] == teacher_id)
+
+    other_batch_times = {
+        (slot["day"], slot["period"])
+        for slot in slots
+        if slot is not target_slot and slot["batch_id"] == target_slot["batch_id"]
+    }
+    other_teacher_times = {
+        (slot["day"], slot["period"])
+        for slot in slots
+        if slot is not target_slot and slot["teacher_id"] == teacher_id
+    }
+    other_room_times = {
+        (slot["day"], slot["period"])
+        for slot in slots
+        if slot is not target_slot and slot["room_id"] == target_slot["room_id"]
+    }
+    unavailable = {
+        (entry["day"], entry["period"])
+        for entry in teacher.get("unavailable", [])
+    }
+    teacher_day_load: dict[int, int] = {}
+    for slot in slots:
+        if slot is not target_slot and slot["teacher_id"] == teacher_id:
+            teacher_day_load[slot["day"]] = teacher_day_load.get(slot["day"], 0) + 1
+
+    new_location = None
+    for day in problem["config"]["days"]:
+        if teacher_day_load.get(day, 0) >= teacher.get("max_per_day", len(problem["config"]["periods"])):
+            continue
+        for period in (item["index"] for item in problem["config"]["periods"]):
+            location = (day, period)
+            if location == (target_slot["day"], target_slot["period"]):
+                continue
+            if location in other_batch_times or location in other_teacher_times:
+                continue
+            if location in other_room_times or location in unavailable:
+                continue
+            new_location = location
+            break
+        if new_location is not None:
+            break
+    assert new_location is not None, "Could not find a valid destination for the lecture"
+
+    edit_res = client.post(
+        "/api/edit",
+        json={
+            "message": "Move lecture for diff filter test",
+            "slot_key": {
+                "batch_id": target_slot["batch_id"],
+                "day": target_slot["day"],
+                "period": target_slot["period"],
+            },
+            "new": {
+                "day": new_location[0],
+                "period": new_location[1],
+                "room_id": target_slot["room_id"],
+                "teacher_id": teacher_id,
+            },
+        },
+    )
+    assert edit_res.status_code == 200
+    commit_2 = edit_res.json()["commit"]
+    assert commit_2["id"] == "c0002"
+
+    filtered_res = client.get(
+        "/api/diff",
+        params={"from": commit_1["id"], "to": commit_2["id"], "teacher": teacher_id},
+    )
+    assert filtered_res.status_code == 200
+    filtered = filtered_res.json()
+    assert filtered["changes"]
+
+    for change in filtered["changes"]:
+        if change["type"] in {"moved", "changed"}:
+            requirement_teacher = next(
+                item["teacher_id"]
+                for item in problem["requirements"]
+                if item["id"] == change["requirement_id"]
+            )
+            changed_teachers = {
+                change.get("from", {}).get("teacher_id"),
+                change.get("to", {}).get("teacher_id"),
+            }
+            assert requirement_teacher == teacher_id or (
+                change["type"] == "changed" and teacher_id in changed_teachers
+            )
+        else:
+            assert change["slot"]["teacher_id"] == teacher_id
+
+    expected_summary = {
+        kind: sum(change["type"] == kind for change in filtered["changes"])
+        for kind in ("moved", "added", "removed", "changed")
+    }
+    assert filtered["summary"] == expected_summary
+
+    uninvolved_teacher = next(
+        item["id"] for item in problem["teachers"] if item["id"] != teacher_id
+    )
+    uninvolved_res = client.get(
+        "/api/diff",
+        params={"from": commit_1["id"], "to": commit_2["id"], "teacher": uninvolved_teacher},
+    )
+    assert uninvolved_res.status_code == 200
+    assert uninvolved_res.json()["changes"] == []
+    assert uninvolved_res.json()["summary"] == {
+        "moved": 0,
+        "added": 0,
+        "removed": 0,
+        "changed": 0,
+    }
+
+    unfiltered_res = client.get(
+        "/api/diff",
+        params={"from": commit_1["id"], "to": commit_2["id"]},
+    )
+    assert unfiltered_res.status_code == 200
+    from vcs.diff import compute_diff
+
+    assert unfiltered_res.json() == compute_diff(
+        snap_from=commit_1["id"],
+        snap_to=commit_2["id"],
+        problem=problem,
+        from_id=commit_1["id"],
+        to_id=commit_2["id"],
+        vcs=test_vcs,
+    )
+    assert len(unfiltered_res.json()["changes"]) >= len(filtered["changes"])
+
+    unknown_teacher_res = client.get(
+        "/api/diff",
+        params={"from": commit_1["id"], "to": commit_2["id"], "teacher": "unknown_id"},
+    )
+    assert unknown_teacher_res.status_code == 404
+    assert unknown_teacher_res.json()["error"]["code"] == "NOT_FOUND"
