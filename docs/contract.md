@@ -4,7 +4,7 @@
 Everyone codes against this file. Paste it into every AI prompt (Antigravity / Copilot).
 **Only Person 4 (Integration) edits this file.** Request changes in the team chat; bump the version below.
 
-`contract version: 1.0`
+`contract version: 1.1`
 
 ---
 
@@ -260,7 +260,8 @@ Base path: `/api`. All bodies and responses are JSON. The frontend talks only to
 | POST | `/api/edit` | Move or change one slot, validated, creates an `edit` commit | `{ "message": "...", "slot_key": {"batch_id","day","period"}, "new": {"day","period","room_id","teacher_id"} }` | `{ "commit": Commit }` or `Error` |
 | GET | `/api/commits` | History, newest first (no snapshots) | none | `[CommitSummary]` |
 | GET | `/api/commits/{id}` | One commit with snapshot | none | `Commit` |
-| GET | `/api/diff?from=c0006&to=c0007` | Diff two commits | none | `Diff` |
+| GET | `/api/diff?from=c0006&to=c0007` | Diff two commits; optional `teacher=<teacher_id>` filters changes involving that teacher | none | `Diff` |
+| GET | `/api/export/ics?teacher=t01&weeks=16` | Export a recurring calendar for exactly one `teacher`, `batch`, or `room` owner; `weeks` defaults to 16 | none | `text/calendar` attachment (`.ics`) |
 | POST | `/api/revert` | New commit restoring an old snapshot | `{ "commit_id": "c0004" }` | `{ "commit": Commit }` |
 | GET | `/api/view?batch=b_se_a` | Grid-friendly view (also `teacher=` and `room=`) | none | `GridView` |
 | POST | `/api/seed` | Reset to seeded demo data | none | `{ "ok": true }` |
@@ -328,3 +329,4 @@ HTTP status: `400` for clash, bad request, and infeasible; `404` for not found; 
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 | 2026-10-17 | Initial contract | P4 |
+| 1.1 | 2026-10-17 | Add ICS export and optional teacher-filtered diffs | P4 |
