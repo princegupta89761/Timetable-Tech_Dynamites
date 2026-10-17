@@ -1,0 +1,55 @@
+# CampusWeave - System Architecture Text Specification (draw.io & eraser.io Ready)
+
+## 1. System Actors (Top Layer)
+[Administrator] 
+  - Functions: Institution Setup, Solver Generation, Conflict Center, VCS History
+[Department Coordinator] 
+  - Functions: Department Timetable Drafts, Workload Review, Room Requests
+[Teacher / Faculty] 
+  - Functions: Today's Lectures, Weekly Load, Slot Swap Requests
+[Student] 
+  - Functions: Class Grid, Room Location, Timetable Updates
+
+## 2. Client Tier (Web & Mobile Responsive)
+[React 18 + Vite SPA]
+  - Bulbasaur Botanical Theme (CSS Variables: #174D35, #29965B, #CFF4D7, #FAF8EF)
+  - i18next Localization Engine (English, Hindi Devanagari)
+  - Interactive Timetable Grid (Filter by Batch, Teacher, Room)
+  - Visual VCS Commit Diff Panel & Rollback
+  - [CampusSprout Floating Chat Widget]
+      * Bilingual Suggestion Chips
+      * Deep-link Action Buttons
+      * Role-Aware Query Routing
+
+## 3. Backend Tier (FastAPI REST Services)
+[FastAPI Gateway]
+  - Endpoints:
+    * GET /api/problem & PUT /api/problem
+    * POST /api/generate
+    * GET /api/timetable
+    * POST /api/edit & POST /api/revert
+    * GET /api/commits & GET /api/diff
+    * GET /api/view?batch=... | teacher=... | room=...
+    * POST /api/chat (Multilingual Chatbot Service)
+
+## 4. Scheduling & Conflict Engine
+[OR-Tools CP-SAT Solver]
+  - Bounded 10s Time Limit
+  - Zero Teacher Clashes
+  - Zero Room Overlaps
+  - Zero Batch Conflicts
+[Immutable VCS Tree]
+  - Commit ID, Parent Commit Pointer, Author, ISO Timestamp
+  - Slot-Level Diff Detection & Conflict Diagnostics
+
+## 5. Intelligence Tier (AI Proxy / Fallback)
+[CampusSprout Engine]
+  - Session Role Authorization
+  - External AI Provider (Optional: Gemini / OpenAI via ENV)
+  - Deterministic Rule-Based Fallback Engine
+  - Bilingual Response Formatter (Hindi Devanagari + English)
+
+## 6. Storage Tier
+[Data Persistence]
+  - data/seed.json (Institution Initial Setup)
+  - In-Memory Commit Snapshots (Fast Rollbacks & Diffs)

@@ -1,0 +1,19 @@
+{
+  "welcome_title": "CampusSprout Assistant",
+  "welcome_msg": "Hello! I'm CampusSprout, your CampusWeave assistant. I can help you understand your timetable, find class information, check available scheduling information, and learn how to use CampusWeave.",
+  "chat_placeholder": "Ask CampusSprout a question in English or Hindi...",
+  "send": "Send",
+  "clear": "Clear",
+  "chips": [
+    "Show my timetable for today",
+    "Where is my next class?",
+    "How does timetable generation work?",
+    "How can I understand scheduling conflicts?"
+  ],
+  "role_admin": "Administrator",
+  "role_coordinator": "Department Coordinator",
+  "role_teacher": "Teacher",
+  "role_student": "Student",
+  "basic_mode": "Basic assistant mode (Rule-based engine active)",
+  "error_empty": "Please enter a question before sending."
+}

@@ -1,0 +1,64 @@
+graph TD
+    %% ==========================================
+    %% CampusWeave System Architecture
+    %% Buildasaur - Indigo Tech Fest, Round 2
+    %% ==========================================
+
+    subgraph USERS["1. System Actors & Roles"]
+        Admin["Administrator (Institution-wide Control)"]
+        Coord["Department Coordinator (Workload & Reviews)"]
+        Teacher["Teacher (Schedule, Rooms, Change Requests)"]
+        Student["Student (Class Schedule, Notifications)"]
+    end
+
+    subgraph FRONTEND["2. Frontend Client (React 18 + Vite)"]
+        UI["CampusWeave Web App (Bulbasaur Botanical Theme)"]
+        i18n["i18next Engine (English / Hindi Devanagari)"]
+        Grid["Interactive Timetable & VCS Diff Visualizer"]
+        ChatUI["CampusSprout Floating Chat Widget"]
+        UI --- i18n
+        UI --- Grid
+        UI --- ChatUI
+    end
+
+    subgraph BACKEND["3. Backend Application Tier (FastAPI)"]
+        AuthFilter["Role & Session Validator"]
+        ChatRouter["POST /api/chat Router"]
+        APIRouter["Timetable API (/problem, /generate, /view, /edit, /diff)"]
+        Engine["Constraint Satisfaction Engine (OR-Tools CP-SAT)"]
+        Validator["Constraint Validator & Conflict Detection"]
+        VCS["Git-like VCS Commits & History Manager"]
+    end
+
+    subgraph INTELLIGENCE["4. Multilingual Intelligence Tier"]
+        AI_Provider["External LLM Proxy (Gemini/OpenAI - Env Configured)"]
+        RuleFallback["Deterministic Rule-based Fallback & Localized Engine"]
+    end
+
+    subgraph DATA["5. Storage Tier"]
+        SeedData["Problem Definition (data/seed.json)"]
+        Snapshots["In-Memory Immutable Commit Tree & Snapshots"]
+    end
+
+    subgraph HARDWARE["6. Hardware & Infrastructure"]
+        HW["Not applicable (Pure Software Cloud/Web Platform)"]
+    end
+
+    %% Communication Flows
+    Admin & Coord & Teacher & Student <==> |HTTPS / Responsive Web| UI
+    ChatUI <==> |JSON: message, language, role| ChatRouter
+    UI <==> |REST JSON Requests| APIRouter
+
+    APIRouter --> AuthFilter
+    ChatRouter --> AuthFilter
+
+    ChatRouter --> AI_Provider
+    ChatRouter --> RuleFallback
+    ChatRouter -.-> |Read Active Schedule| VCS
+
+    APIRouter --> Engine
+    Engine --> Validator
+    Validator --> VCS
+
+    APIRouter --> SeedData
+    VCS --> Snapshots

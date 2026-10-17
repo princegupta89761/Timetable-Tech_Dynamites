@@ -1,0 +1,89 @@
+/* Bulbasaur Botanical Theme for CampusWeave */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Bulbasaur Nature-Inspired Palette */
+  --forest-green: #174D35;
+  --deep-forest: #103B2B;
+  --leaf-green: #29965B;
+  --fresh-mint: #CFF4D7;
+  --light-mint: #EAF9ED;
+  --botanical-cream: #FAF8EF;
+  --earth-brown: #8B6745;
+  --sunshine-yellow: #F3C969;
+  --flower-coral: #E98176;
+  --lagoon-teal: #278F89;
+
+  /* Semantic tokens */
+  --color-primary: var(--leaf-green);
+  --color-primary-dark: var(--deep-forest);
+  --color-bg: var(--botanical-cream);
+  --color-surface: #FFFFFF;
+  --color-border: var(--fresh-mint);
+  --color-text: var(--deep-forest);
+  --color-text-muted: #52605B;
+}
+
+.dark {
+  --color-bg: #0D2218;
+  --color-surface: #132D21;
+  --color-border: #1E4634;
+  --color-text: #EAF9ED;
+  --color-text-muted: #A3C2B3;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Inter', 'Noto Sans Devanagari', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Botanical Card & Leaf accents */
+.botanical-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px -2px rgba(23, 77, 53, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.botanical-card:hover {
+  box-shadow: 0 8px 28px -4px rgba(23, 77, 53, 0.12);
+}
+
+.leaf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--light-mint);
+  color: var(--forest-green);
+  border: 1px solid var(--fresh-mint);
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.dark .leaf-badge {
+  background: rgba(41, 150, 91, 0.2);
+  color: var(--fresh-mint);
+  border-color: rgba(41, 150, 91, 0.4);
+}
+
+/* Custom Botanical Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--light-mint);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--leaf-green);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--forest-green);
+}

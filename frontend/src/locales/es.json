@@ -1,0 +1,19 @@
+{
+  "welcome_title": "Asistente CampusSprout",
+  "welcome_msg": "¡Hola! Soy CampusSprout, tu asistente de CampusWeave. Puedo ayudarte a comprender tu horario, encontrar aulas y aprender a usar el sistema.",
+  "chat_placeholder": "Pregunta a CampusSprout...",
+  "send": "Enviar",
+  "clear": "Limpiar",
+  "chips": [
+    "Mostrar mi horario para hoy",
+    "¿Dónde es mi próxima clase?",
+    "¿Cómo funciona la generación de horarios?",
+    "¿Cómo entender los conflictos?"
+  ],
+  "role_admin": "Administrador",
+  "role_coordinator": "Coordinador de Departamento",
+  "role_teacher": "Profesor",
+  "role_student": "Estudiante",
+  "basic_mode": "Modo de asistente básico (Motor basado en reglas activo)",
+  "error_empty": "Por favor escribe una pregunta antes de enviar."
+}

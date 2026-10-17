@@ -19,6 +19,7 @@ from vcs import commits
 from vcs.commits import ClashError
 from vcs.diff import compute_diff
 from vcs.validate import validate
+from api.chat import ChatRequest, ChatResponse, process_chat_message
 
 router = APIRouter(prefix="/api", tags=["timetable"])
 
@@ -341,3 +342,10 @@ def get_grid_view(
 def seed_demo_data() -> dict[str, Any]:
     load_seed_problem()
     return {"ok": True}
+
+
+# 12. POST /api/chat (CampusSprout Multilingual Assistant)
+@router.post("/chat", response_model=ChatResponse)
+def chat_endpoint(req: ChatRequest) -> ChatResponse:
+    problem = get_problem()
+    return process_chat_message(req, problem)

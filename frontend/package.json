@@ -8,9 +8,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "i18next": "^26.4.7",
+    "lucide-react": "^0.302.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "lucide-react": "^0.302.0"
+    "react-i18next": "^17.0.20"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
