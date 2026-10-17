@@ -106,7 +106,7 @@ export async function getCommitList() {
   return await parseJsonResponse(res);
 }
 
-export async function getCommitDiff(commitId) {
+export async function getCommitDiff(commitId, teacher = null) {
   if (useMock()) {
     await loadMockData();
     const commit = mockStore.commits.find(c => c.id === commitId);
@@ -120,7 +120,9 @@ export async function getCommitDiff(commitId) {
   const commit = await parseJsonResponse(commitRes);
   if (!commit.parent_id) return null;
 
-  const query = new URLSearchParams({ from: commit.parent_id, to: commit.id });
+  const params = { from: commit.parent_id, to: commit.id };
+  if (teacher) params.teacher = teacher;
+  const query = new URLSearchParams(params);
   const res = await fetch(`/api/diff?${query}`);
   if (!res.ok) throw new Error(`GET /api/diff failed: ${res.status}`);
   return await parseJsonResponse(res);

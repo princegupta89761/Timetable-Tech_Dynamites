@@ -4,7 +4,7 @@
 Everyone codes against this file. Paste it into every AI prompt (Antigravity / Copilot).
 **Only Person 4 (Integration) edits this file.** Request changes in the team chat; bump the version below.
 
-`contract version: 1.1`
+`contract version: 1.2`
 
 ---
 
@@ -265,8 +265,38 @@ Base path: `/api`. All bodies and responses are JSON. The frontend talks only to
 | POST | `/api/revert` | New commit restoring an old snapshot | `{ "commit_id": "c0004" }` | `{ "commit": Commit }` |
 | GET | `/api/view?batch=b_se_a` | Grid-friendly view (also `teacher=` and `room=`) | none | `GridView` |
 | POST | `/api/seed` | Reset to seeded demo data | none | `{ "ok": true }` |
+| POST | `/api/chat` | Multilingual timetable & VCS AI assistant (English, Hindi, Spanish, French, Marathi) | `{ "message": str, "language": "en"|"hi"|"es"|"fr"|"mr", "role": "admin"|"coordinator"|"teacher"|"student" }` | `ChatResponse` |
 
 *Stretch (only if ahead):* `POST /api/branches`, `POST /api/merge`.
+
+### /api/chat
+Multilingual AI Chatbot endpoint for CampusSprout Assistant. Read-only: never edits timetables or commits.
+
+**Request:**
+```json
+{
+  "message": "When is Prof. Sharma free on Wednesday?",
+  "language": "en",
+  "role": "admin"
+}
+```
+Validation:
+- `message`: Required non-empty string.
+- `language`: `"en"` | `"hi"` | `"es"` | `"fr"` | `"mr"` (defaults to `"en"`).
+- `role`: `"admin"` | `"coordinator"` | `"teacher"` | `"student"`.
+
+**Response:**
+```json
+{
+  "reply": "Prof. Sharma is scheduled for DBMS in Room 204 at Monday 09:00-10:00 (Period 0).",
+  "language": "en",
+  "source": "gemini" | "application-help" | "timetable-data" | "rule-based-fallback",
+  "navAction": {
+    "label": "Open Timetable Grid",
+    "page": "timetable"
+  }
+}
+```
 
 ### CommitSummary
 Same as `Commit` but without `snapshot`.
@@ -330,3 +360,4 @@ HTTP status: `400` for clash, bad request, and infeasible; `404` for not found; 
 |---|---|---|---|
 | 1.0 | 2026-10-17 | Initial contract | P4 |
 | 1.1 | 2026-10-17 | Add ICS export and optional teacher-filtered diffs | P4 |
+| 1.2 | 2026-10-17 | Add multilingual /api/chat assistant endpoint (Twist 2) | P4 |

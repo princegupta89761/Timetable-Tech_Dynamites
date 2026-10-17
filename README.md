@@ -1,7 +1,17 @@
 # Buildsaur — Clash-Free Campus Timetable Generator with Git-Style Version Control
 
-> **Indigo Tech Fest — Software Track 1**  
-> *"A timetable generator that never clashes, and remembers every change like Git."*
+> **Indigo Tech Fest — Round 2: The Twist (Software Track)**  
+> *"A timetable generator that never clashes, remembers every change like Git, and blooms with Bulbasaur vibes & multilingual AI assistance."*
+
+---
+
+## 🌟 Round 2: The Three Mandatory Twists
+
+| Twist | Implementation | Status |
+|---|---|---|
+| **Twist 1: Bulbasaur Theme** | Complete nature-inspired UI with leaf & botanical motifs, lush green color palette (`#174D35`, `#29965B`, `#CFF4D7`, `#FAF8EF`), Sprout mascot, clean Tailwind CSS glassmorphism. | ✅ Implemented |
+| **Twist 2: Multilingual AI Chatbot** | **CampusSprout AI**: Multilingual scheduling assistant supporting **English, Hindi (हिन्दी), Spanish (Español), French (Français), and Marathi (मराठी)**. Integrated with Google Gemini API + deterministic offline scheduling fallback, with role-based contextual answers (Admin, Coordinator, Teacher, Student) and action buttons. | ✅ Implemented |
+| **Twist 3: System Architecture** | Interactive `/architecture` visual page in the web app, interactive mermaid diagram ([`docs/architecture.mmd`](docs/architecture.mmd)), Draw.io specifications ([`docs/architecture-drawio.txt`](docs/architecture-drawio.txt)), and a crisp **2-minute judging pitch script** ([`docs/architecture-2min-script.md`](docs/architecture-2min-script.md)). | ✅ Implemented |
 
 ---
 
@@ -9,9 +19,11 @@
 
 Creating university campus timetables by hand inevitably causes clashes: a professor double-booked across batches, two classes assigned to the same room, or lab sessions fragmented across different days.
 
-**Buildsaur** solves this with a two-part system:
+**Buildsaur** solves this with a multi-layered platform:
 1. **Constraint-Satisfaction Generator (OR-Tools CP-SAT):** Automatically creates a mathematically verified, 100% clash-free timetable satisfying all capacity, room type, teacher availability, and consecutive lab block constraints in under 3 seconds.
-2. **Git-Style Timetable Version Control (VCS):** Every schedule generation or edit creates a permanent commit (`c0001`, `c0002`...). You can view plain-English diffs between any two versions, revert mistakes without rewriting history, and prevent invalid manual edits with pre-commit validation.
+2. **Git-Style Timetable Version Control (VCS):** Every schedule generation or edit creates a permanent commit (`c0001`, `c0002`...). You can view plain-English diffs between any two versions, filter changes by teacher, revert mistakes without rewriting history, and prevent invalid manual edits with pre-commit validation.
+3. **iCalendar (.ics) Sync:** Instant one-click recurring calendar export for any student batch, professor, or room directly into Google Calendar, Apple Calendar, or Microsoft Outlook.
+4. **CampusSprout Multilingual Assistant:** Floating AI guide that speaks English, Hindi, Spanish, French, and Marathi to navigate the timetable, answer schedule inquiries, and diagnose conflicts.
 
 ---
 

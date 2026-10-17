@@ -69,3 +69,30 @@ def test_chat_empty_message(client):
     assert res.status_code == 200
     data = res.json()
     assert "valid" in data["reply"].lower() or "please" in data["reply"].lower()
+
+
+def test_chat_spanish_query(client):
+    res = client.post("/api/chat", json={
+        "message": "¿Cómo generar un horario?",
+        "language": "es",
+        "role": "coordinator"
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["language"] == "es"
+    assert "horario" in data["reply"].lower() or "generar" in data["reply"].lower()
+    assert data["navAction"]["page"] == "generate"
+
+
+def test_chat_french_query(client):
+    res = client.post("/api/chat", json={
+        "message": "Comment générer un emploi du temps?",
+        "language": "fr",
+        "role": "admin"
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["language"] == "fr"
+    assert "conflit" in data["reply"].lower() or "générer" in data["reply"].lower()
+    assert data["navAction"]["page"] == "generate"
+

@@ -1,11 +1,25 @@
 /* src/components/DiffPanel.jsx */
 import React, { useEffect, useState } from 'react';
-import { getCommitDiff } from '../api';
+import { getCommitDiff, getProblem } from '../api';
 
 export default function DiffPanel({ commitId }) {
   const [diff, setDiff] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [teachers, setTeachers] = useState([]);
+  const [selectedTeacher, setSelectedTeacher] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    getProblem()
+      .then((p) => {
+        if (active && p?.teachers) setTeachers(p.teachers);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!commitId) {
@@ -19,7 +33,7 @@ export default function DiffPanel({ commitId }) {
     setError(null);
     async function fetchDiff() {
       try {
-        const result = await getCommitDiff(commitId);
+        const result = await getCommitDiff(commitId, selectedTeacher || null);
         if (active) setDiff(result);
       } catch (err) {
         if (active) setError(err.message || 'Unable to load diff.');
@@ -32,7 +46,7 @@ export default function DiffPanel({ commitId }) {
     return () => {
       active = false;
     };
-  }, [commitId]);
+  }, [commitId, selectedTeacher]);
 
   if (!commitId) return <div className="text-center py-4">Select a commit to view diff.</div>;
   if (loading) return <div className="text-center py-4">Loading diff…</div>;
@@ -49,6 +63,24 @@ export default function DiffPanel({ commitId }) {
 
   return (
     <div className="space-y-4">
+      {teachers.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-light_mint/40 p-2.5 rounded-lg border border-fresh_mint">
+          <label htmlFor="teacher-filter-select" className="text-xs font-semibold uppercase tracking-wider text-forest">
+            Filter changes by teacher:
+          </label>
+          <select
+            id="teacher-filter-select"
+            value={selectedTeacher}
+            onChange={(e) => setSelectedTeacher(e.target.value)}
+            className="rounded-md border border-leaf/40 bg-white px-2.5 py-1 text-xs font-medium text-forest focus:border-leaf focus:ring-1 focus:ring-leaf"
+          >
+            <option value="">All Teachers (Unfiltered)</option>
+            {teachers.map((t) => (
+              <option key={t.id} value={t.id}>{t.name || t.id}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {['moved', 'added', 'removed', 'changed'].map((type) => (
           <div key={type} className="rounded border p-3">
